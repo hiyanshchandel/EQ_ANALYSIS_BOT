@@ -1,0 +1,35 @@
+services:
+  mcp-server:
+    build: .
+    command: ["python", "-m", "eq_analyst.mcp_server"]
+    env_file: .env
+    environment:
+      MCP_HOST: 0.0.0.0  # listen inside the container network
+      MCP_PORT: "8000"
+      LOG_JSON: "true"
+    ports:
+      - "8000:8000"  # also lets MCP Inspector / Claude Desktop connect from your machine
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  bot:
+    build: .
+    command: ["python", "-m", "eq_analyst.bot"]
+    env_file: .env
+    environment:
+      MCP_SERVER_URL: http://mcp-server:8000/mcp  # service name = hostname inside compose
+      CHECKPOINT_DB_PATH: /app/data/checkpoints.sqlite
+      LOG_JSON: "true"
+    volumes:
+      - bot-data:/app/data  # conversations survive container restarts
+    depends_on:
+      mcp-server:
+        condition: service_healthy  # the bot loads MCP tools at startup
+    restart: unless-stopped
+
+volumes:
+  bot-data:
